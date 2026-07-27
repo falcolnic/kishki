@@ -2,6 +2,184 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 /* ------------------------------------------------------------------ */
+/*  Web Audio API Synthesizer (Watch Dogs / ctOS Audio Engine)       */
+/* ------------------------------------------------------------------ */
+let globalAudioCtx = null
+
+function getAudioContext() {
+  if (typeof window === 'undefined') return null
+  if (!globalAudioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+    if (AudioContextClass) globalAudioCtx = new AudioContextClass()
+  }
+  if (globalAudioCtx && globalAudioCtx.state === 'suspended') {
+    globalAudioCtx.resume()
+  }
+  return globalAudioCtx
+}
+
+// Utility to generate procedural white noise buffers
+function createNoiseBuffer(ctx, duration) {
+  const bufferSize = ctx.sampleRate * duration
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1
+  }
+  return buffer
+}
+
+const playSFX = (type) => {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+
+    if (type === 'boot') {
+      // Clean sci-fi UI blip (inspired by minimalist computer-terminal aesthetics)
+      const osc = ctx.createOscillator()
+      const osc2 = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'sine'
+      osc2.type = 'sine'
+
+      const baseFreq = 1000 + Math.random() * 400
+      osc.frequency.setValueAtTime(baseFreq, now)
+      osc2.frequency.setValueAtTime(baseFreq * 2, now) // octave harmonic for "digital" shimmer
+
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(0.15, now + 0.008)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
+
+      osc.connect(gain)
+      osc2.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc.start(now)
+      osc2.start(now)
+      osc.stop(now + 0.06)
+      osc2.stop(now + 0.06)
+    } else if (type === 'type') {
+      // Hacker Terminal Key Switch Transients
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(1400 + Math.random() * 400, now)
+      osc.frequency.exponentialRampToValueAtTime(250, now + 0.015)
+
+      gain.gain.setValueAtTime(0.06, now)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.015)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc.start(now)
+      osc.stop(now + 0.015)
+
+    } else if (type === 'node') {
+      // ctOS Network Node Link (Sub-bass impact + Digital Chirp + Static Burst)
+      
+      // 1. Heavy Sub-Bass Impact Thud
+      const sub = ctx.createOscillator()
+      const subGain = ctx.createGain()
+      sub.type = 'sine'
+      sub.frequency.setValueAtTime(160, now)
+      sub.frequency.exponentialRampToValueAtTime(35, now + 0.08)
+      subGain.gain.setValueAtTime(0.22, now)
+      subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08)
+      sub.connect(subGain)
+      subGain.connect(ctx.destination)
+      sub.start(now)
+      sub.stop(now + 0.08)
+
+      // 2. High-Tech Digital Node Sweep
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'square'
+      osc.frequency.setValueAtTime(700, now)
+      osc.frequency.exponentialRampToValueAtTime(1500, now + 0.05)
+      gain.gain.setValueAtTime(0.08, now)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now)
+      osc.stop(now + 0.05)
+
+      // 3. Crisp Static Snap
+      const noise = ctx.createBufferSource()
+      noise.buffer = createNoiseBuffer(ctx, 0.015)
+      const nFilter = ctx.createBiquadFilter()
+      nFilter.type = 'highpass'
+      nFilter.frequency.value = 3500
+      const nGain = ctx.createGain()
+      nGain.gain.setValueAtTime(0.07, now)
+      nGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.015)
+      noise.connect(nFilter)
+      nFilter.connect(nGain)
+      nGain.connect(ctx.destination)
+      noise.start(now)
+
+    } else if (type === 'error') {
+      // Industrial System Denied / Glitch Buzz
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(140, now)
+      osc.frequency.setValueAtTime(90, now + 0.08)
+
+      gain.gain.setValueAtTime(0.18, now)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc.start(now)
+      osc.stop(now + 0.22)
+
+    } else if (type === 'success') {
+      // ctOS Override Success (Sub drop + Tri-tone ascending chord)
+      
+      // Sub Impact
+      const sub = ctx.createOscillator()
+      const subGain = ctx.createGain()
+      sub.type = 'triangle'
+      sub.frequency.setValueAtTime(150, now)
+      sub.frequency.exponentialRampToValueAtTime(40, now + 0.25)
+      subGain.gain.setValueAtTime(0.25, now)
+      subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25)
+      sub.connect(subGain)
+      subGain.connect(ctx.destination)
+      sub.start(now)
+      sub.stop(now + 0.25)
+
+      // Ascending Digital Chord
+      const freqs = [523.25, 783.99, 1046.5] // C5, G5, C6
+      freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(f, now + i * 0.05)
+
+        gain.gain.setValueAtTime(0.12, now + i * 0.05)
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.05 + 0.18)
+
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+
+        osc.start(now + i * 0.05)
+        osc.stop(now + i * 0.05 + 0.18)
+      })
+    }
+  } catch (e) {
+    // Audio Context fallback
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Config — sasaOS / KISHKI Systems Sequence Settings                */
 /* ------------------------------------------------------------------ */
 
@@ -25,13 +203,13 @@ const USERNAME = 'operator'
 const PASSWORD_LENGTH = 8
 
 const CARD = {
-  empId: 'KSH-0417',
-  cls: 'L3_CREW',
+  empId: 'ЧЛЕН-0141',
+  cls: 'L2_СКВАДА',
   fullName: 'ГЛЕБ БОРИСОВИЧ',
   hex: '7D2A12F9B1SDFA4',
 }
 
-const FOOTER_NOTE = 'Property of KISHKI Systems. All usage is subject to PATROL Active Monitoring.'
+const FOOTER_NOTE = 'Собственность KISHKI Squad. Все действия подлежат активному мониторингу Твича'
 
 // Target Pattern Indices on 3x3 Grid (0 to 8)
 const TARGET_PATTERN = [0, 3, 6, 4, 8, 5, 2] 
@@ -39,6 +217,7 @@ const TARGET_PATTERN = [0, 3, 6, 4, 8, 5, 2]
 /* ------------------------------------------------------------------ */
 
 export default function LoadingScreen({ onComplete }) {
+  const [hasUserStarted, setHasUserStarted] = useState(false)
   const [bootLines, setBootLines] = useState(INITIAL_BOOT_LINES)
   const [bootLinesShown, setBootLinesShown] = useState(0)
   const [showSessionTag, setShowSessionTag] = useState(false)
@@ -62,17 +241,28 @@ export default function LoadingScreen({ onComplete }) {
   const [enteringProgress, setEnteringProgress] = useState(0)
   const [exiting, setExiting] = useState(false)
   const [elapsedSec, setElapsedSec] = useState(0)
+  
+  const [showNarekFlash, setShowNarekFlash] = useState(false)
+  const narekAudioRef = useRef(null)
 
   const minigameResolverRef = useRef(null)
+  const enteringAudioRef = useRef(null)
 
-  // Session stopwatch
   useEffect(() => {
     const start = Date.now()
     const id = setInterval(() => setElapsedSec(Math.floor((Date.now() - start) / 1000)), 1000)
     return () => clearInterval(id)
   }, [])
 
+  const handleStartBoot = () => {
+    getAudioContext()
+    playSFX('boot')
+    setHasUserStarted(true)
+  }
+
   useEffect(() => {
+    if (!hasUserStarted) return
+
     let cancelled = false
     let enterListenerCleanup = null
     const timeouts = []
@@ -100,26 +290,24 @@ export default function LoadingScreen({ onComplete }) {
     }
 
     async function run() {
-      // 1. Session tag appears
       setShowSessionTag(true)
+      playSFX('boot')
       await delay(700)
       if (cancelled) return
 
-      // 2. Boot log fills upwards
       for (let i = 0; i < INITIAL_BOOT_LINES.length; i++) {
         if (cancelled) return
         setBootLinesShown(i + 1)
+        playSFX('boot')
         await delay(350)
       }
       await delay(400)
       if (cancelled) return
 
-      // 3. Center intro notice card
       setShowCenterIntro(true)
-      await delay(1200)
+      await delay(4000)
       if (cancelled) return
 
-      // 4. Center panel loading bar & HUD outline
       setShowCenterIntro(false)
       setStage('login')
       setShowPanel(true)
@@ -130,8 +318,8 @@ export default function LoadingScreen({ onComplete }) {
       await delay(800)
       if (cancelled) return
 
-      // 5. Cipher rail decodes & HUD corners reveal
       setCipherResolved(true)
+      playSFX('boot')
       await delay(700)
       if (cancelled) return
       setCipherIdActive(true)
@@ -143,10 +331,10 @@ export default function LoadingScreen({ onComplete }) {
       await delay(800)
       if (cancelled) return
 
-      // 6. Wordmark shifts UP, Login Form slides DOWN
       setShowLoginForm(true)
       setBootLines((prev) => [...prev, `[PATROL] Opened session for user(${USERNAME})`])
       setBootLinesShown((prev) => prev + 1)
+      playSFX('boot')
 
       await delay(800)
       if (cancelled) return
@@ -155,21 +343,30 @@ export default function LoadingScreen({ onComplete }) {
       await delay(600)
       if (cancelled) return
 
-      // 7. Password types out
       for (let i = 0; i < PASSWORD_LENGTH; i++) {
         if (cancelled) return
         setTypedCount(i + 1)
-        await delay(280)
+        playSFX('type')
+
+        // Base typing speed varies naturally per keystroke
+        let pause = 140 + Math.random() * 180 // ~140-320ms base range
+
+        // Occasionally add a longer "thinking" pause (like recalling next char)
+        if (Math.random() < 0.25) {
+          pause += 220 + Math.random() * 300
+        }
+
+        await delay(pause)
       }
       await delay(500)
       if (cancelled) return
 
-      // 8. Auto-submit & Verification
       setSubmitting(true)
       await delay(1200)
       if (cancelled) return
       setSubmitting(false)
       setJustVerified(true)
+      playSFX('success')
 
       setBootLines((prev) => [...prev, `[PATROL] IDENTITY_VERIFIED // WELCOME BACK`])
       setBootLinesShown((prev) => prev + 1)
@@ -182,7 +379,6 @@ export default function LoadingScreen({ onComplete }) {
       await delay(500)
       if (cancelled) return
 
-      // 9. Identity Card Stage
       setStage('flash-card')
       await delay(500)
       if (cancelled) return
@@ -192,10 +388,10 @@ export default function LoadingScreen({ onComplete }) {
       if (cancelled) return
       setWaitingForEnter(true)
 
-      // Wait for Enter key press
       await new Promise((resolve) => {
         function onKey(e) {
           if (e.key === 'Enter') {
+            playSFX('type')
             window.removeEventListener('keydown', onKey)
             resolve()
           }
@@ -208,8 +404,8 @@ export default function LoadingScreen({ onComplete }) {
       setWaitingForEnter(false)
       setBootLines((prev) => [...prev, `[PATROL] Pattern Override Required...`])
       setBootLinesShown((prev) => prev + 1)
+      playSFX('boot')
 
-      // 10. Transition to Pattern Unlock Minigame Stage
       setStage('minigame')
       await new Promise((resolve) => {
         minigameResolverRef.current = resolve
@@ -218,13 +414,17 @@ export default function LoadingScreen({ onComplete }) {
 
       setBootLines((prev) => [...prev, `[PATROL] Session closed for user(${USERNAME})`])
       setBootLinesShown((prev) => prev + 1)
+      playSFX('boot')
 
-      // 11. Intermediate block morph -> Final "ENTERING SYSTEM" progress
       setStage('flash-entering')
       await delay(600)
       if (cancelled) return
 
       setStage('entering')
+      if (enteringAudioRef.current) {
+        enteringAudioRef.current.currentTime = 0
+        enteringAudioRef.current.play().catch(() => {})
+      }
       await animateFill(setEnteringProgress, 3500)
       if (cancelled) return
 
@@ -241,7 +441,7 @@ export default function LoadingScreen({ onComplete }) {
       if (enterListenerCleanup) enterListenerCleanup()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [hasUserStarted])
 
   const handleMinigameSuccess = () => {
     if (minigameResolverRef.current) {
@@ -255,13 +455,31 @@ export default function LoadingScreen({ onComplete }) {
 
   return (
     <div
-      className={`fixed inset-0 z-[100] bg-[#0d0d0d] text-[#e2e2e2] font-mono overflow-hidden select-none transition-opacity duration-700 ${
+      onClick={!hasUserStarted ? handleStartBoot : undefined}
+      onKeyDown={!hasUserStarted ? handleStartBoot : undefined}
+      tabIndex={0}
+      className={`fixed inset-0 z-[100] bg-[#0d0d0d] text-[#e2e2e2] font-mono overflow-hidden select-none outline-none transition-opacity duration-700 ${
         exiting ? 'opacity-0' : 'opacity-100'
       }`}
     >
-      {/* Neutral Scanlines & Grid Noise overlays */}
+      <audio ref={enteringAudioRef} src="/audio/bababa.ogg" preload="auto" />
       <div className="absolute inset-0 bg-[radial-gradient(#222222_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
       <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.45)_51%)] bg-[length:100%_4px] pointer-events-none" />
+
+      {/* Initial User Gesture Prompt Overlay */}
+      {!hasUserStarted && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0d]/90 cursor-pointer">
+          <div className="border border-[#3a3a3a] bg-[#171717] px-8 py-6 text-center shadow-2xl relative">
+            <CornerBrackets />
+            <p className="text-sm tracking-[0.3em] text-emerald-400 font-bold uppercase animate-pulse mb-2 font-mono">
+              [ СИСТЕМА ГОТОВА К ЗАПУСКУ ]
+            </p>
+            <p className="text-base tracking-[0.2em] text-[#e2e2e2] uppercase font-mono">
+              НАЖМИТЕ ЛЮБУЮ КНОПКУ, ЧТОБЫ ПРОДОЛЖИТЬ
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Boot Log — Bottom Left */}
       <div className="absolute left-6 sm:left-8 bottom-6 sm:bottom-8 w-[460px] max-w-[85vw] text-xs sm:text-sm leading-relaxed text-[#888888] font-mono z-10">
@@ -366,27 +584,25 @@ export default function LoadingScreen({ onComplete }) {
 
       {/* Center Stage */}
       <div className="relative z-10 h-full w-full flex items-center justify-center px-6">
-        {/* Intro Notice Card */}
         {showCenterIntro && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.5 }}
-            className="relative border border-[#2a2a2a] bg-[#171717]/95 p-10 max-w-sm text-center"
+            className="relative border border-[#2a2a2a] bg-[#171717]/95 p-8 max-w-sm text-center"
           >
             <CornerBrackets />
             <div className="flex justify-center mb-5">
               <DiamondMark />
             </div>
-            <p className="text-xs sm:text-sm leading-relaxed text-[#cccccc] uppercase tracking-wider">
+            <p className="text-xs sm:text-base leading-relaxed text-[#cccccc] uppercase tracking-wider">
               {FOOTER_NOTE}
             </p>
           </motion.div>
         )}
 
         <AnimatePresence mode="wait">
-          {/* 1. Main Login Stage */}
           {stage === 'login' && showPanel && (
             <motion.div
               key="login"
@@ -487,7 +703,6 @@ export default function LoadingScreen({ onComplete }) {
             </motion.div>
           )}
 
-          {/* Morph Block Transition before Identity Card */}
           {stage === 'flash-card' && (
             <motion.div
               key="flash-card"
@@ -501,7 +716,6 @@ export default function LoadingScreen({ onComplete }) {
             </motion.div>
           )}
 
-          {/* 2. Identity Card Stage */}
           {stage === 'card' && (
             <motion.div
               key="card"
@@ -514,7 +728,6 @@ export default function LoadingScreen({ onComplete }) {
             </motion.div>
           )}
 
-          {/* 3. Pattern Unlock Minigame Stage */}
           {stage === 'minigame' && (
             <motion.div
               key="minigame"
@@ -527,7 +740,6 @@ export default function LoadingScreen({ onComplete }) {
             </motion.div>
           )}
 
-          {/* Morph Block Transition before Entering System Bar */}
           {stage === 'flash-entering' && (
             <motion.div
               key="flash-entering"
@@ -544,7 +756,6 @@ export default function LoadingScreen({ onComplete }) {
             </motion.div>
           )}
 
-          {/* 4. Final "ENTERING SYSTEM" Progress Stage */}
           {stage === 'entering' && (
             <motion.div
               key="entering"
@@ -568,12 +779,11 @@ export default function LoadingScreen({ onComplete }) {
 function PatternUnlockMinigame({ onUnlockSuccess }) {
   const [selected, setSelected] = useState([])
   const [isDrawing, setIsDrawing] = useState(false)
-  const [status, setStatus] = useState('playing') // 'playing' | 'success' | 'failed'
+  const [status, setStatus] = useState('playing')
   
   const gridRef = useRef(null)
   const [nodePositions, setNodePositions] = useState([])
 
-  // Recalculates exact center points using offset relative to gridRef container
   const updatePositions = () => {
     if (!gridRef.current) return
     const nodes = gridRef.current.querySelectorAll('.pattern-node')
@@ -586,7 +796,6 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
   }
 
   useEffect(() => {
-    // Initial measurement + small timeout to handle post-mount reflow
     updatePositions()
     const timer = setTimeout(updatePositions, 50)
     window.addEventListener('resize', updatePositions)
@@ -602,23 +811,31 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
     if (!selected.includes(index)) {
       const newSelected = [...selected, index]
       setSelected(newSelected)
+      playSFX('node')
 
-      if (newSelected.length === TARGET_PATTERN.length) {
+      if (
+        newSelected.length === TARGET_PATTERN.length &&
+        newSelected.every((val, idx) => val === TARGET_PATTERN[idx])
+      ) {
         checkPattern(newSelected)
       }
     }
   }
 
   const checkPattern = (sequence) => {
-    const isCorrect = sequence.every((val, idx) => val === TARGET_PATTERN[idx])
+    const isCorrect =
+      sequence.length === TARGET_PATTERN.length &&
+      sequence.every((val, idx) => val === TARGET_PATTERN[idx])
 
     if (isCorrect) {
       setStatus('success')
+      playSFX('success')
       setTimeout(() => {
         if (onUnlockSuccess) onUnlockSuccess()
-      }, 4000)
+      }, 1600)
     } else {
       setStatus('failed')
+      playSFX('error')
       setTimeout(() => {
         setSelected([])
         setStatus('playing')
@@ -627,8 +844,10 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
   }
 
   const handlePointerDown = (index) => {
+    if (status !== 'playing') return
     setIsDrawing(true)
     setSelected([index])
+    playSFX('node')
   }
 
   const handlePointerEnter = (index) => {
@@ -638,39 +857,34 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
   }
 
   const handlePointerUp = () => {
+    if (!isDrawing) return
     setIsDrawing(false)
-    if (selected.length > 0 && selected.length < TARGET_PATTERN.length && status === 'playing') {
-      setStatus('failed')
-      setTimeout(() => {
-        setSelected([])
-        setStatus('playing')
-      }, 500)
+
+    if (status === 'playing' && selected.length > 0) {
+      checkPattern(selected)
     }
   }
 
   return (
-    <div className="relative w-[340px] sm:w-[380px] bg-[#171717] border border-[#2a2a2a] p-6 shadow-2xl flex flex-col items-center select-none">
+    <div className="relative w-[340px] sm:w-[380px] bg-[#141414] border border-[#2a2a2a] p-6 shadow-2xl flex flex-col items-center select-none overflow-hidden">
+      <PuzzleTechBackdrop />
       <CornerBrackets />
 
-      {/* Top Banner */}
-      <div className="w-full bg-[repeating-linear-gradient(45deg,#1f1f1f,#1f1f1f_8px,#2a2a2a_8px,#2a2a2a_16px)] border border-[#333333] py-2 px-3 text-center mb-6">
-        <p className="text-[11px] tracking-[0.2em] font-bold text-[#e2e2e2] uppercase font-mono">
-          НАРИСУЙТЕ ПАТТЕРН ДЛЯ ПОДТВЕРЖДЕНИЯ
+      <div className="relative z-10 w-full bg-[repeating-linear-gradient(45deg,#1f1f1f,#1f1f1f_8px,#2a2a2a_8px,#2a2a2a_16px)] border border-[#333333] py-2 px-3 text-center mb-6">
+        <p className="text-base tracking-[0.2em] font-bold text-[#e2e2e2] uppercase font-mono">
+          ВВЕДИТЕ КЛЮЧ ДЛЯ ПОДТВЕРЖДЕНИЯ
         </p>
       </div>
 
-      {/* Target Guide Icon */}
-      <div className="mb-6 flex flex-col items-center">
+      <div className="relative z-10 mb-6 flex flex-col items-center">
         <TargetPatternGuide />
       </div>
 
-      {/* 3x3 Grid Container */}
       <div
         ref={gridRef}
         onPointerUp={handlePointerUp}
-        className="relative grid grid-cols-3 gap-8 sm:gap-10 p-4 touch-none"
+        className="relative z-10 grid grid-cols-3 gap-8 sm:gap-10 p-4 touch-none"
       >
-        {/* SVG Connecting Lines Overlay */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
           {selected.map((nodeIdx, i) => {
             if (i === 0) return null
@@ -688,8 +902,8 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
                 y1={prevNode.y}
                 x2={currNode.x}
                 y2={currNode.y}
-                stroke={isSuccess ? '#34d399' : isFailed ? '#ef4444' : '#e2e2e2'}
-                strokeWidth="2"
+                stroke={isSuccess ? '#a3e635' : isFailed ? '#dc2626' : '#e2e2e2'}
+                strokeWidth="2.5"
                 strokeDasharray={isSuccess ? 'none' : '4 4'}
                 className="transition-colors duration-200"
               />
@@ -697,7 +911,6 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
           })}
         </svg>
 
-        {/* 9 Interactive Nodes */}
         {Array.from({ length: 9 }).map((_, idx) => {
           const isSelected = selected.includes(idx)
           const isSuccess = status === 'success' && isSelected
@@ -708,49 +921,45 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
               key={idx}
               onPointerDown={() => handlePointerDown(idx)}
               onPointerEnter={() => handlePointerEnter(idx)}
-              className={`pattern-node relative w-12 h-12 flex items-center justify-center cursor-pointer transition-all duration-150 ${
-                isSuccess
-                  ? 'bg-emerald-400 text-black border-emerald-300'
-                  : isFailed
-                  ? 'bg-red-600 text-white border-red-500'
-                  : isSelected
-                  ? 'bg-[#e2e2e2] text-[#0d0d0d] border-[#ffffff]'
-                  : 'bg-[#1c1c1c] border border-[#3a3a3a] hover:border-[#666666]'
-              }`}
+              className="pattern-node relative z-20 w-12 h-12 flex items-center justify-center cursor-pointer"
             >
-              <span className="text-[10px] font-bold font-mono">
-                {isSelected ? '■' : '¤'}
-              </span>
-
-              {isSelected && (
-                <>
-                  <span className="absolute -top-1 -left-1 w-1.5 h-1.5 border-t-2 border-l-2 border-current" />
-                  <span className="absolute -top-1 -right-1 w-1.5 h-1.5 border-t-2 border-r-2 border-current" />
-                  <span className="absolute -bottom-1 -left-1 w-1.5 h-1.5 border-b-2 border-l-2 border-current" />
-                  <span className="absolute -bottom-1 -right-1 w-1.5 h-1.5 border-b-2 border-r-2 border-current" />
-                </>
+              {isFailed ? (
+                <div className="w-full h-full bg-[#dc2626] border border-red-500 flex items-center justify-center p-1 shadow-[0_0_10px_rgba(220,38,38,0.5)]">
+                  <SkullSprite />
+                </div>
+              ) : isSuccess ? (
+                <div className="w-full h-full bg-[#a3e635] text-[#0d0d0d] border border-[#bef264] flex items-center justify-center p-1 relative shadow-[0_0_12px_rgba(163,230,53,0.4)]">
+                  <PixelGlyphSprite />
+                </div>
+              ) : isSelected ? (
+                <div className="w-full h-full bg-[#e2e2e2] text-[#0d0d0d] border border-white flex items-center justify-center p-1 relative">
+                  <PixelGlyphSprite />
+                </div>
+              ) : (
+                <div className="w-full h-full cursor-pointer hover:border-[#555555] transition-colors">
+                  <IdleNodeSprite />
+                </div>
               )}
             </div>
           )
         })}
       </div>
 
-      {/* Success Notification Popup */}
       <AnimatePresence>
         {status === 'success' && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="absolute bottom-6 right-4 left-4 z-30 bg-emerald-400 text-black p-4 border border-emerald-300 shadow-xl"
+            className="absolute bottom-6 right-4 left-4 z-30 bg-[#a3e635] text-black p-4 border border-[#bef264] shadow-xl"
           >
             <div className="flex justify-between items-center mb-1">
-              <span className="bg-black text-emerald-400 font-bold text-[10px] px-2 py-0.5 uppercase tracking-wider font-mono">
-                ПОДТВЕРЖДЕНИЕ УСПЕШНО
+              <span className="bg-black text-[#a3e635] font-bold text-[10px] px-2 py-0.5 uppercase tracking-wider font-mono">
+                OVERRIDE SUCCESS
               </span>
             </div>
             <p className="text-xs font-mono font-bold tracking-wider uppercase mt-1.5">
-              УЧЕТНЫЕ ДАННЫЕ ПОДТВЕРЖДЕНЫ.
+              CREDENTIALS VERIFIED.
             </p>
             <p className="text-[11px] font-mono tracking-widest uppercase opacity-80">
               STARTING SYSTEM ...
@@ -762,10 +971,134 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
   )
 }
 
+/* ------------------------------------------------------------------ */
+/* Sci-Fi Schematic Backdrop Component                                */
+/* ------------------------------------------------------------------ */
+
+function PuzzleTechBackdrop() {
+  return (
+    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none">
+      <svg className="absolute inset-0 w-full h-full opacity-15" width="100%" height="100%">
+        <defs>
+          <pattern id="dot-matrix" width="20" height="20" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1" fill="#ffffff" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#dot-matrix)" />
+      </svg>
+
+      <div className="absolute top-2 left-3 w-28 h-20 bg-[#ffffff]/[0.02] border-r border-b border-[#ffffff]/[0.05]" />
+      <div className="absolute top-16 right-4 w-36 h-40 bg-[#000000]/40 border-l border-t border-[#ffffff]/[0.04]" />
+      <div className="absolute bottom-6 left-2 w-40 h-32 bg-[#ffffff]/[0.015] border-t border-r border-[#ffffff]/[0.05]" />
+      <div className="absolute bottom-2 right-3 w-28 h-24 bg-[#000000]/30 border-t border-[#ffffff]/[0.03]" />
+
+      <div className="absolute top-5 left-5 font-mono text-[9px] text-[#ffffff]/20 leading-tight">
+        <p>»&gt; ++ ~</p>
+        <p>+даша ¤</p>
+        <p className="mt-1 font-bold">1C0</p>
+        <p>»&gt; 21</p>
+      </div>
+
+      <div className="absolute top-8 right-6 font-mono text-[9px] text-[#ffffff]/20 leading-none text-right">
+        <p>]каTя</p>
+        <p className="mt-0.5">///3</p>
+      </div>
+
+      <div className="absolute top-[42%] left-[45%] font-mono text-[9px] text-[#ffffff]/15 leading-tight">
+        <p>*сочи S</p>
+        <p>♥ [X]</p>
+        <p className="mt-1">01</p>
+      </div>
+
+      <div className="absolute bottom-16 left-6 font-mono text-[9px] text-[#ffffff]/15 leading-tight">
+        <p>»» лерка</p>
+        <p>oo 1</p>
+        <p>S крис</p>
+      </div>
+
+      <div className="absolute bottom-4 left-4 font-mono text-[9px] text-[#ffffff]/20 leading-none">
+        <p>/ростик¬ •J</p>
+      </div>
+
+      <div className="absolute bottom-6 right-8 font-mono text-[9px] text-[#ffffff]/15 text-right leading-none">
+        <p>[0кирилF]</p>
+        <p className="mt-1">:: 89</p>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Sprite Graphics Sub-Components                                     */
+/* ------------------------------------------------------------------ */
+
+function IdleNodeSprite() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-full h-full" shapeRendering="crispEdges">
+      <rect x="0" y="0" width="24" height="24" fill="#141414" />
+      <rect x="0" y="0" width="24" height="24" fill="none" stroke="#3a3a3a" strokeWidth="1" />
+
+      <rect x="1" y="1" width="2" height="2" fill="#777777" />
+      <rect x="21" y="1" width="2" height="2" fill="#777777" />
+      <rect x="1" y="21" width="2" height="2" fill="#777777" />
+      <rect x="21" y="21" width="2" height="2" fill="#777777" />
+
+      <rect x="3" y="3" width="18" height="18" fill="none" stroke="#282828" strokeWidth="1" />
+      <rect x="6" y="6" width="12" height="12" fill="none" stroke="#555555" strokeWidth="1" />
+      <rect x="8" y="8" width="8" height="8" fill="none" stroke="#222222" strokeWidth="1" />
+
+      <rect x="11" y="9" width="2" height="2" fill="#888888" />
+      <rect x="11" y="13" width="2" height="2" fill="#888888" />
+      <rect x="9" y="11" width="2" height="2" fill="#888888" />
+      <rect x="13" y="11" width="2" height="2" fill="#888888" />
+
+      <rect x="10" y="10" width="1" height="1" fill="#cccccc" />
+      <rect x="13" y="10" width="1" height="1" fill="#cccccc" />
+      <rect x="10" y="13" width="1" height="1" fill="#cccccc" />
+      <rect x="13" y="13" width="1" height="1" fill="#cccccc" />
+    </svg>
+  )
+}
+
+function PixelGlyphSprite() {
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      <span className="absolute top-1 left-1 w-1.5 h-1.5 border-t-2 border-l-2 border-current" />
+      <span className="absolute top-1 right-1 w-1.5 h-1.5 border-t-2 border-r-2 border-current" />
+      <span className="absolute bottom-1 left-1 w-1.5 h-1.5 border-b-2 border-l-2 border-current" />
+      <span className="absolute bottom-1 right-1 w-1.5 h-1.5 border-b-2 border-r-2 border-current" />
+      <div className="w-3.5 h-3.5 rounded-full border-2 border-current flex items-center justify-center">
+        <div className="w-1 h-1 bg-current rounded-full" />
+      </div>
+    </div>
+  )
+}
+
+function SkullSprite() {
+  return (
+    <svg viewBox="0 0 16 16" className="w-full h-full" shapeRendering="crispEdges">
+      <rect x="5" y="2" width="6" height="1" fill="#ffffff" />
+      <rect x="4" y="3" width="8" height="1" fill="#ffffff" />
+      <rect x="3" y="4" width="10" height="5" fill="#ffffff" />
+      <rect x="4" y="9" width="8" height="1" fill="#ffffff" />
+
+      <rect x="5" y="10" width="6" height="3" fill="#ffffff" />
+
+      <rect x="5" y="5" width="2" height="3" fill="#dc2626" />
+      <rect x="9" y="5" width="2" height="3" fill="#dc2626" />
+
+      <rect x="7" y="8" width="2" height="1" fill="#dc2626" />
+
+      <rect x="6" y="11" width="1" height="2" fill="#dc2626" />
+      <rect x="9" y="11" width="1" height="2" fill="#dc2626" />
+    </svg>
+  )
+}
+
 function TargetPatternGuide() {
   return (
     <div className="relative flex flex-col items-center p-2 border border-[#2a2a2a] bg-[#111111]">
-      <svg className="w-14 h-16" viewBox="0 0 40 50" fill="none">
+      <svg className="w-12 h-14" viewBox="0 0 40 50" fill="none">
         <circle cx="8" cy="8" r="2.5" fill="#e2e2e2" />
         <circle cx="8" cy="25" r="2.5" fill="#e2e2e2" />
         <circle cx="8" cy="42" r="2.5" fill="#e2e2e2" />
@@ -782,10 +1115,6 @@ function TargetPatternGuide() {
     </div>
   )
 }
-
-/* ------------------------------------------------------------------ */
-/* Presentational Helpers                                            */
-/* ------------------------------------------------------------------ */
 
 function NoiseGridRail({ resolved }) {
   const [, setTick] = useState(0)
@@ -934,15 +1263,15 @@ function IdCard({ confirming }) {
         <div className="min-w-[210px]">
           <div className="flex gap-8 mb-4">
             <div>
-              <p className="text-xs text-[#777777] tracking-widest">EMPID NO.</p>
+              <p className="text-xs text-[#777777] tracking-widest">ПОЗЫВНОЙ</p>
               <p className="text-base text-[#e2e2e2] font-mono font-semibold">{CARD.empId}</p>
             </div>
             <div>
-              <p className="text-xs text-[#777777] tracking-widest">CLASS</p>
+              <p className="text-xs text-[#777777] tracking-widest">КЛАСС</p>
               <p className="text-base text-[#e2e2e2] font-mono font-semibold">{CARD.cls}</p>
             </div>
           </div>
-          <p className="text-xs text-[#777777] tracking-widest">FULL NAME</p>
+          <p className="text-xs text-[#777777] tracking-widest">ФИО</p>
           <p className="text-lg sm:text-xl text-[#e2e2e2] font-mono font-bold tracking-wide">{CARD.fullName}</p>
           
           <div className="mt-4 flex items-center gap-2 border border-[#2a2a2a] px-3 py-1.5 w-fit bg-[#0d0d0d]">
@@ -952,14 +1281,16 @@ function IdCard({ confirming }) {
         </div>
 
         <div className="w-28 h-32 bg-[#222222] border border-[#2a2a2a] flex items-center justify-center overflow-hidden">
-          <svg className="w-20 h-20 text-[#555555] fill-current" viewBox="0 0 24 24">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-          </svg>
+          <img 
+            src="/images/id-photo.jpg" 
+            alt="ID photo" 
+            className="w-full h-full object-cover"
+          />
         </div>
       </div>
 
       <p className={`mt-8 text-xs sm:text-sm tracking-[0.2em] text-[#888888] font-semibold ${confirming ? 'animate-pulse' : 'opacity-0'}`}>
-        <span className="text-emerald-400">[ENTER]</span> TO CONFIRM
+        <span className="text-emerald-400">[ENTER]</span> ЧТОБЫ ПРОДОЛЖИТЬ
       </p>
     </div>
   )
@@ -969,7 +1300,7 @@ function EnteringBar({ progress }) {
   return (
     <div className="flex flex-col items-center w-80 sm:w-96">
       <p className="text-sm sm:text-base tracking-[0.3em] uppercase text-[#e2e2e2] mb-5 font-mono font-semibold">
-        ENTERING SYSTEM
+        ВХОД В СИСТЕМУ
       </p>
       <div className="relative w-full flex items-center gap-2.5">
         <span className="w-1.5 h-1.5 bg-[#e2e2e2]" />
