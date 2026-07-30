@@ -1,3 +1,5 @@
+import { audioBus } from '../audio/audioBus'
+import VolumeControl from './shared/VolumeControl'
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -34,6 +36,8 @@ const playSFX = (type) => {
     const ctx = getAudioContext()
     if (!ctx) return
     const now = ctx.currentTime
+    const v = audioBus.volume
+    if (v <= 0) return
 
     if (type === 'boot') {
       // Clean sci-fi UI blip (inspired by minimalist computer-terminal aesthetics)
@@ -49,7 +53,7 @@ const playSFX = (type) => {
       osc2.frequency.setValueAtTime(baseFreq * 2, now) // octave harmonic for "digital" shimmer
 
       gain.gain.setValueAtTime(0.0001, now)
-      gain.gain.exponentialRampToValueAtTime(0.15, now + 0.008)
+      gain.gain.exponentialRampToValueAtTime(0.15 * v, now + 0.008)
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
 
       osc.connect(gain)
@@ -80,7 +84,7 @@ const playSFX = (type) => {
 
     } else if (type === 'node') {
       // ctOS Network Node Link (Sub-bass impact + Digital Chirp + Static Burst)
-      
+
       // 1. Heavy Sub-Bass Impact Thud
       const sub = ctx.createOscillator()
       const subGain = ctx.createGain()
@@ -141,7 +145,7 @@ const playSFX = (type) => {
 
     } else if (type === 'success') {
       // ctOS Override Success (Sub drop + Tri-tone ascending chord)
-      
+
       // Sub Impact
       const sub = ctx.createOscillator()
       const subGain = ctx.createGain()
@@ -212,11 +216,11 @@ const CARD = {
 const FOOTER_NOTE = 'Собственность KISHKI Squad. Все действия подлежат активному мониторингу Твича'
 
 // Target Pattern Indices on 3x3 Grid (0 to 8)
-const TARGET_PATTERN = [0, 3, 6, 4, 8, 5, 2] 
+const TARGET_PATTERN = [0, 3, 6, 4, 8, 5, 2]
 
 /* ------------------------------------------------------------------ */
 
-export default function LoadingScreen({ onComplete }) {
+export default function LoadingScreen({ onComplete, volume = 70, onVolumeChange }) {
   const [hasUserStarted, setHasUserStarted] = useState(false)
   const [bootLines, setBootLines] = useState(INITIAL_BOOT_LINES)
   const [bootLinesShown, setBootLinesShown] = useState(0)
@@ -229,19 +233,21 @@ export default function LoadingScreen({ onComplete }) {
   const [cipherIdActive, setCipherIdActive] = useState(false)
   const [showCorners, setShowCorners] = useState(false)
   const [wordmarkSplit, setWordmarkSplit] = useState(false)
+  const [barGrown, setBarGrown] = useState(false)
+  const [prefixShown, setPrefixShown] = useState(false)
   const [showLoginForm, setShowLoginForm] = useState(false)
   const [usernameRevealed, setUsernameRevealed] = useState(false)
   const [typedCount, setTypedCount] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [justVerified, setJustVerified] = useState(false)
-  
+
   // Stages: 'intro' | 'login' | 'flash-card' | 'card' | 'minigame' | 'flash-entering' | 'entering'
-  const [stage, setStage] = useState('intro') 
+  const [stage, setStage] = useState('intro')
   const [waitingForEnter, setWaitingForEnter] = useState(false)
   const [enteringProgress, setEnteringProgress] = useState(0)
   const [exiting, setExiting] = useState(false)
   const [elapsedSec, setElapsedSec] = useState(0)
-  
+
   const [showNarekFlash, setShowNarekFlash] = useState(false)
   const narekAudioRef = useRef(null)
 
@@ -311,7 +317,15 @@ export default function LoadingScreen({ onComplete }) {
       setShowCenterIntro(false)
       setStage('login')
       setShowPanel(true)
-      await animateFill(setPanelProgress, 1400)
+      await animateFill(setPanelProgress, 2600)
+      if (cancelled) return
+
+      // 1. bar sits full, then thickens
+      await delay(450)
+      if (cancelled) return
+      setBarGrown(true)
+      playSFX('boot')
+      await delay(950)
       if (cancelled) return
 
       setShowFrame(true)
@@ -326,9 +340,15 @@ export default function LoadingScreen({ onComplete }) {
       await delay(400)
       if (cancelled) return
 
+      // 2. bar retracts right→left, uncovering OS
       setShowCorners(true)
       setWordmarkSplit(true)
-      await delay(800)
+      await delay(1350)
+      if (cancelled) return
+
+      // 3. sasa fades in inside the white block
+      setPrefixShown(true)
+      await delay(1250)
       if (cancelled) return
 
       setShowLoginForm(true)
@@ -376,7 +396,7 @@ export default function LoadingScreen({ onComplete }) {
 
       setJustVerified(false)
       setShowLoginForm(false)
-      await delay(500)
+      await delay(1500)
       if (cancelled) return
 
       setStage('flash-card')
@@ -423,6 +443,7 @@ export default function LoadingScreen({ onComplete }) {
       setStage('entering')
       if (enteringAudioRef.current) {
         enteringAudioRef.current.currentTime = 0
+        enteringAudioRef.current.volume = audioBus.volume
         enteringAudioRef.current.play().catch(() => {})
       }
       await animateFill(setEnteringProgress, 3500)
@@ -449,6 +470,10 @@ export default function LoadingScreen({ onComplete }) {
     }
   }
 
+  useEffect(() => {
+    if (enteringAudioRef.current) enteringAudioRef.current.volume = volume / 100
+  }, [volume])
+
   const minutes = String(Math.floor(elapsedSec / 60)).padStart(2, '0')
   const seconds = String(elapsedSec % 60).padStart(2, '0')
   const clockLabel = `${minutes}:${seconds}`
@@ -462,6 +487,11 @@ export default function LoadingScreen({ onComplete }) {
         exiting ? 'opacity-0' : 'opacity-100'
       }`}
     >
+      {onVolumeChange && (
+        <div className="absolute top-8 right-8 z-20">
+          <VolumeControl volume={volume} onChange={onVolumeChange} />
+        </div>
+      )}
       <audio ref={enteringAudioRef} src="/audio/bababa.ogg" preload="auto" />
       <div className="absolute inset-0 bg-[radial-gradient(#222222_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
       <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.45)_51%)] bg-[length:100%_4px] pointer-events-none" />
@@ -482,7 +512,7 @@ export default function LoadingScreen({ onComplete }) {
       )}
 
       {/* Boot Log — Bottom Left */}
-      <div className="absolute left-6 sm:left-8 bottom-6 sm:bottom-8 w-[460px] max-w-[85vw] text-xs sm:text-sm leading-relaxed text-[#888888] font-mono z-10">
+      <div className="absolute left-6 sm:left-8 bottom-6 sm:bottom-8 w-[500px] max-w-[85vw] text-xs sm:text-sm leading-relaxed text-[#888888] font-mono z-10">
         <AnimatePresence>
           {bootLines.slice(0, bootLinesShown).map((line, i) => (
             <motion.div
@@ -613,55 +643,60 @@ export default function LoadingScreen({ onComplete }) {
               className="flex flex-col items-center"
             >
               <motion.div
-                animate={{ y: showLoginForm ? -20 : 0 }}
-                transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1] }}
+                animate={{ y: showLoginForm ? -30 : 0 }}
+                transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
                 className="relative flex items-center justify-center p-3"
               >
                 <CornerBrackets />
-                {!wordmarkSplit ? (
-                  <div className="w-64 sm:w-72 h-12 bg-[#1c1c1c] relative overflow-hidden border border-[#2a2a2a]">
-                    <div
-                      className="absolute inset-y-0 left-0 bg-[#e2e2e2] transition-[width] duration-100 ease-linear"
-                      style={{ width: `${panelProgress}%` }}
-                    />
-                  </div>
-                ) : (
+                <div className="flex items-center w-64 sm:w-72">
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                    className="flex items-center gap-3"
+                    initial={false}
+                    animate={{
+                      height: barGrown ? 48 : 30,
+                      width: wordmarkSplit ? '68%' : '100%',
+                    }}
+                    transition={{
+                      height: { duration: 0.75, ease: [0.16, 1, 0.3, 1] },
+                      width: { duration: 1.15, ease: [0.16, 1, 0.3, 1] },
+                    }}
+                    style={{ transformOrigin: 'left center' }}
+                    className="bg-[#1c1c1c] relative overflow-hidden border border-[#2a2a2a] shrink-0"
                   >
-                    <motion.div
-                      initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                      className="w-48 sm:w-56 h-12 sm:h-14 bg-[#e2e2e2] flex items-end justify-end px-3 py-1 shrink-0"
-                    >
-                      <span className="text-[#0d0d0d] font-mono font-black text-2xl sm:text-3xl tracking-tighter uppercase leading-none">
-                        {OS_PREFIX}
-                      </span>
-                    </motion.div>
+                    <div
+                      className="absolute inset-y-0 left-0 bg-[#e2e2e2]"
+                      style={{
+                        width: `${panelProgress}%`,
+                        transition: 'width 340ms cubic-bezier(0.2, 0, 0.38, 0.9)',
+                      }}
+                    />
                     <motion.span
-                      initial={{ opacity: 0, x: -16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.85, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-                      className="font-sans text-5xl sm:text-6xl font-light text-[#e2e2e2] tracking-wider"
+                      initial={false}
+                      animate={{ opacity: prefixShown ? 1 : 0 }}
+                      transition={{ duration: 1.15, ease: 'easeOut' }}
+                      className="absolute right-3 bottom-0.5 text-[#0d0d0d] font-mono font-black text-2xl sm:text-3xl tracking-tighter uppercase leading-none"
                     >
-                      {OS_SUFFIX}
+                      {OS_PREFIX}
                     </motion.span>
                   </motion.div>
-                )}
+                  <motion.span
+                    initial={false}
+                    animate={{ opacity: wordmarkSplit ? 1 : 0 }}
+                    transition={{ duration: 1.1, delay: wordmarkSplit ? 0.55 : 0, ease: 'easeOut' }}
+                    className="flex-1 pl-3 font-sans text-5xl sm:text-6xl font-light text-[#e2e2e2] tracking-wider leading-none whitespace-nowrap"
+                  >
+                    {OS_SUFFIX}
+                  </motion.span>
+                </div>
               </motion.div>
 
               <AnimatePresence>
                 {showLoginForm && (
                   <motion.div
                     key="form"
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 12 }}
-                    transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1] }}
+                    exit={{ opacity: 0, y: 14 }}
+                    transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
                     className="mt-6 w-72 sm:w-80 flex flex-col items-end"
                   >
                     <p className="w-full text-xs tracking-[0.2em] text-[#888888] uppercase mb-1 font-mono">
@@ -674,7 +709,7 @@ export default function LoadingScreen({ onComplete }) {
                             key={i}
                             initial={{ opacity: 0, scale: 0.6 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className={`inline-block w-3 h-3 ${
+                            className={`inline-block w-3 h-5 ${
                               justVerified ? 'bg-emerald-400' : 'bg-[#e2e2e2]'
                             }`}
                           />
@@ -780,7 +815,7 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
   const [selected, setSelected] = useState([])
   const [isDrawing, setIsDrawing] = useState(false)
   const [status, setStatus] = useState('playing')
-  
+
   const gridRef = useRef(null)
   const [nodePositions, setNodePositions] = useState([])
 
@@ -832,7 +867,7 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
       playSFX('success')
       setTimeout(() => {
         if (onUnlockSuccess) onUnlockSuccess()
-      }, 1600)
+      }, 2600)
     } else {
       setStatus('failed')
       playSFX('error')
@@ -954,15 +989,15 @@ function PatternUnlockMinigame({ onUnlockSuccess }) {
             className="absolute bottom-6 right-4 left-4 z-30 bg-[#a3e635] text-black p-4 border border-[#bef264] shadow-xl"
           >
             <div className="flex justify-between items-center mb-1">
-              <span className="bg-black text-[#a3e635] font-bold text-[10px] px-2 py-0.5 uppercase tracking-wider font-mono">
-                OVERRIDE SUCCESS
+              <span className="bg-black text-[#a3e635] font-bold text-xs px-2 py-0.5 uppercase tracking-wider font-mono">
+                УСПЕШЕНЫЙ ВХОД
               </span>
             </div>
-            <p className="text-xs font-mono font-bold tracking-wider uppercase mt-1.5">
-              CREDENTIALS VERIFIED.
+            <p className="text-sm font-mono font-bold tracking-wider uppercase mt-1.5">
+              ДАННЫЕ ПОДТВЕРЖДЕНЫ
             </p>
-            <p className="text-[11px] font-mono tracking-widest uppercase opacity-80">
-              STARTING SYSTEM ...
+            <p className="text-xs font-mono tracking-widest uppercase opacity-80">
+              ЗАПУСК СИСТЕМЫ ...
             </p>
           </motion.div>
         )}
@@ -1273,7 +1308,7 @@ function IdCard({ confirming }) {
           </div>
           <p className="text-xs text-[#777777] tracking-widest">ФИО</p>
           <p className="text-lg sm:text-xl text-[#e2e2e2] font-mono font-bold tracking-wide">{CARD.fullName}</p>
-          
+
           <div className="mt-4 flex items-center gap-2 border border-[#2a2a2a] px-3 py-1.5 w-fit bg-[#0d0d0d]">
             <DiamondMark tiny />
             <span className="text-xs text-[#cccccc] font-mono">{CARD.hex}</span>
@@ -1281,9 +1316,9 @@ function IdCard({ confirming }) {
         </div>
 
         <div className="w-28 h-32 bg-[#222222] border border-[#2a2a2a] flex items-center justify-center overflow-hidden">
-          <img 
-            src="/images/id-photo.jpg" 
-            alt="ID photo" 
+          <img
+            src="/images/id-photo.jpg"
+            alt="ID photo"
             className="w-full h-full object-cover"
           />
         </div>
@@ -1312,3 +1347,6 @@ function EnteringBar({ progress }) {
     </div>
   )
 }
+
+// --- preview bridge: exposes the component to the sasaOS desktop page ---
+window.KishkiLoadingScreen = LoadingScreen

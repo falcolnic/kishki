@@ -1,17 +1,18 @@
-import { useState, useRef } from 'react'
-import CornerMark from './components/CornerMark'
-import ScrollProgress from './components/ScrollProgress'
-import Hero from './components/Hero'
-import History from './components/History'
-import Squad from './components/Squad'
-import BreachMinigame from './components/BreachMinigame'
-import Footer from './components/Footer'
+import { useState, useRef, useEffect } from 'react'
 import LoadingScreen from './components/LoadingScreen'
+import Desktop from './components/desktop/Desktop'
+import { setBusVolume } from './audio/audioBus'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
   const [showNarekFlash, setShowNarekFlash] = useState(false)
   const narekAudioRef = useRef(null)
+  const [volume, setVolume] = useState(70)
+
+  useEffect(() => {
+    setBusVolume(volume / 100)
+    if (narekAudioRef.current) narekAudioRef.current.volume = volume / 100
+  }, [volume])
 
   const handleLoadingComplete = () => {
     setLoading(false)
@@ -19,11 +20,12 @@ export default function App() {
     const audio = narekAudioRef.current
     if (!audio) return
 
-    const startDelay = 700 // ms gap after loading screen's own sound finishes — tweak to taste
+    const startDelay = 5000
 
     setTimeout(() => {
       audio.currentTime = 0
-      audio.playbackRate = 0.85
+      audio.playbackRate = 0.75
+      audio.volume = volume / 100
 
       const handleEnded = () => {
         setShowNarekFlash(true)
@@ -45,7 +47,9 @@ export default function App() {
 
       <audio ref={narekAudioRef} src="/audio/narek_gay.wav" preload="auto" />
 
-      {loading && <LoadingScreen onComplete={handleLoadingComplete} />}
+      {loading && (
+        <LoadingScreen onComplete={handleLoadingComplete} volume={volume} onVolumeChange={setVolume} />
+      )}
 
       {showNarekFlash && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80">
@@ -55,19 +59,7 @@ export default function App() {
         </div>
       )}
 
-      {!loading && (
-        <>
-          <CornerMark />
-          <ScrollProgress />
-          <main>
-            <Hero />
-            <History />
-            <Squad />
-            <BreachMinigame />
-          </main>
-          <Footer />
-        </>
-      )}
+      {!loading && <Desktop volume={volume} onVolumeChange={setVolume} />}
     </div>
   )
 }
